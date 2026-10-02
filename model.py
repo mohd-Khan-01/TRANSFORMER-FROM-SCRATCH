@@ -88,7 +88,7 @@ class MultiHeadAttention(nn.Module):
         x=x.transpose(1,2).contigous().view(x.shape[0],-1,self.h*self.d_k)
         
         return self.w_o(x)
-class Residual_connection(nn.module):
+class Residual_connection(nn.Module):
     def __init__(self,dropout:nn.Dropout):
         super().__init__()
         self.dropout=dropout
@@ -126,7 +126,7 @@ class DecoderBlock(nn.Module):
         self.self_attention_block=self_attention_block
         self.cross_attention_block=cross_attention_block
         self.feed_forward_block=feed_forward_block
-        self.residual_connection=nn.Module(Residual_connection(dropout) for _ in  range (3))
+        self.residual_connection=nn.ModuleList(Residual_connection(dropout) for _ in  range (3))
         
     def forward(self,x,src_mask,trg_mask):
         x=self.residual_connection[0](x, lambda x: self.self_attention_block(x,x,x,src_mask))
