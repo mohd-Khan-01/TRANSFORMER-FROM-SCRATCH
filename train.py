@@ -33,7 +33,7 @@ def greedy_decode(model, source, source_mask, tokenizer_src, tokenizer_tgt, max_
         out = model.decode(encoder_output, source_mask, decoder_input, decoder_mask)
 
         # get next token
-        prob = model.project(out[:, -1])
+        prob = model.projection(out[:, -1])
         _, next_word = torch.max(prob, dim=1)
         decoder_input = torch.cat(
             [decoder_input, torch.empty(1, 1).type_as(source).fill_(next_word.item()).to(device)], dim=1
@@ -156,7 +156,7 @@ def train_model(config):
     print(f'using the devce {device}')
     Path(config["model_folder"]).mkdir(parents=True,exist_ok=True)
     train_dataloader,val_dataloader,tokenizer_src,tokenizer_tgt=get_ds(config)
-    model=get_model(config,tokenizer_src.get_vocab_size(),tokenizer_tgt.get_vocab_size())
+    model=get_model(config,tokenizer_src.get_vocab_size(),tokenizer_tgt.get_vocab_size()).to(device)
     #TensorBoard
     writer=SummaryWriter(config["experiment_name"])
     
@@ -170,13 +170,13 @@ def train_model(config):
     if config["preload"]:
         model_filename=get_weights_file_path(config,config["preload"])
         print(f"preloading the model ------{model_filename}")
-        state=torch.load(model_filename)
+        state=torch.load(model_filename,map_location=device)
         model.load_state_dict(state["model_state_dict"])
         intitial_epoch=state["epoch"]+1
         optimizer.load_state_dict(state["optimizer_state_dict"])
         global_step=state["global_step"]
     
-    loss_fn=nn.CrossEntropyLoss(ignore_index=tokenizer_src.token_to_id('[PAD]'),label_smoothing=0.1).to(device)
+    loss_fn=nn.CrossEntropyLoss(ignore_index=tokenizer_tgt.token_to_id('[PAD]'),label_smoothing=0.1).to(device)
     
     for epoch in range(intitial_epoch, config['num_epochs']):
         torch.cuda.empty_cache()
@@ -191,7 +191,7 @@ def train_model(config):
             # Run the tensors through the encoder, decoder and the projection layer
             encoder_output = model.encode(encoder_input, encoder_mask) # (B, seq_len, d_model)
             decoder_output = model.decode(encoder_output, encoder_mask, decoder_input, decoder_mask) # (B, seq_len, d_model)
-            proj_output = model.project(decoder_output) # (B, seq_len, vocab_size)
+            proj_output = model.projection(decoder_output) # (B, seq_len, vocab_size)
 
             # Compare the output with the label
             label = batch['label'].to(device) # (B, seq_len)
