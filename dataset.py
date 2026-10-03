@@ -14,9 +14,28 @@ class BilingualDataset(Dataset):
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
 
-        self.sos_token = torch.tensor([tokenizer_tgt.token_to_id("[SOS]")], dtype=torch.int64)
-        self.eos_token = torch.tensor([tokenizer_tgt.token_to_id("[EOS]")], dtype=torch.int64)
-        self.pad_token = torch.tensor([tokenizer_tgt.token_to_id("[PAD]")], dtype=torch.int64)
+        # Source special tokens
+        self.src_sos_token = torch.tensor(
+            [tokenizer_src.token_to_id("[SOS]")],
+            dtype=torch.int64
+        )
+        self.src_eos_token = torch.tensor(
+            [tokenizer_src.token_to_id("[EOS]")],
+            dtype=torch.int64
+        )
+        self.src_pad_token = tokenizer_src.token_to_id("[PAD]")
+
+        # Target special tokens
+        self.tgt_sos_token = torch.tensor(
+            [tokenizer_tgt.token_to_id("[SOS]")],
+            dtype=torch.int64
+        )
+        self.tgt_eos_token = torch.tensor(
+            [tokenizer_tgt.token_to_id("[EOS]")],
+            dtype=torch.int64
+        )
+        self.tgt_pad_token = tokenizer_tgt.token_to_id("[PAD]")
+
 
     def __len__(self):
         return len(self.ds)
@@ -37,15 +56,15 @@ class BilingualDataset(Dataset):
 
         # Make sure the number of padding tokens is not negative. If it is, the sentence is too long
         if enc_num_padding_tokens < 0 or dec_num_padding_tokens < 0:
-            raise ValueError("Sentence is too long")
+            raise ValueError("Sentence is too long for the configured sequence length")
 
         # Add <s> and </s> token
         encoder_input = torch.cat(
             [
-                self.sos_token,
+                self.src_sos_token,
                 torch.tensor(enc_input_tokens, dtype=torch.int64),
-                self.eos_token,
-                torch.tensor([self.pad_token] * enc_num_padding_tokens, dtype=torch.int64),
+                self.src_eos_token,
+                torch.tensor([self.src_pad_token] * enc_num_padding_tokens, dtype=torch.int64),
             ],
             dim=0,
         )
@@ -53,9 +72,9 @@ class BilingualDataset(Dataset):
         # Add only <s> token
         decoder_input = torch.cat(
             [
-                self.sos_token,
+                self.tgt_sos_token,
                 torch.tensor(dec_input_tokens, dtype=torch.int64),
-                torch.tensor([self.pad_token] * dec_num_padding_tokens, dtype=torch.int64),
+                torch.tensor([self.tgt_pad_token] * dec_num_padding_tokens, dtype=torch.int64),
             ],
             dim=0,
         )
@@ -64,8 +83,8 @@ class BilingualDataset(Dataset):
         label = torch.cat(
             [
                 torch.tensor(dec_input_tokens, dtype=torch.int64),
-                self.eos_token,
-                torch.tensor([self.pad_token] * dec_num_padding_tokens, dtype=torch.int64),
+                self.tgt_eos_token,
+                torch.tensor([self.tgt_pad_token] * dec_num_padding_tokens, dtype=torch.int64),
             ],
             dim=0,
         )
@@ -74,12 +93,28 @@ class BilingualDataset(Dataset):
         assert encoder_input.size(0) == self.seq_len
         assert decoder_input.size(0) == self.seq_len
         assert label.size(0) == self.seq_len
+        
+         # Masks
+        encoder_mask = (
+            (encoder_input != self.src_pad_token)
+            .unsqueeze(0)
+            .unsqueeze(0)
+            .int()
+        )
+
+        decoder_mask = (
+            (decoder_input != self.tgt_pad_token)
+            .unsqueeze(0)
+            .int()
+            & causal_mask(decoder_input.size(0))
+        )
+
 
         return {
             "encoder_input": encoder_input,  # (seq_len)
             "decoder_input": decoder_input,  # (seq_len)
-            "encoder_mask": (encoder_input != self.pad_token).unsqueeze(0).unsqueeze(0).int(), # (1, 1, seq_len)
-            "decoder_mask": (decoder_input != self.pad_token).unsqueeze(0).int() & causal_mask(decoder_input.size(0)), # (1, seq_len) & (1, seq_len, seq_len),
+            "encoder_mask": encoder_mask,
+            "decoder_mask": decoder_mask,
             "label": label,  # (seq_len)
             "src_text": src_text,
             "tgt_text": tgt_text,

@@ -18,13 +18,13 @@ class Positional_Encoding(nn.Module):
         self.seq_length=seq_length
         self.dropout=nn.Dropout(dropout)
         #lets create a matrix of shape (d_model,seq_length)
-        pe=torch.zeros(d_model,seq_length)
+        pe=torch.zeros(seq_length,d_model)
         #create a vector of shape (seq_len,1)
         position=torch.arange(0,seq_length,dtype=torch.float).unsqueeze(1)
         div_term=torch.exp(torch.arange(0,d_model,2).float()*(-math.log(1000.0)/d_model))
         #applying sin to the even position and cos to the odd position
         pe[:,0::2]=torch.sin(position*div_term)
-        pe[:,1:2]=torch.cos(position*div_term)
+        pe[:,1::2]=torch.cos(position*div_term)
         pe=pe.unsqueeze(0)
         self.register_buffer("pe",pe)
     def forward(self,x):
