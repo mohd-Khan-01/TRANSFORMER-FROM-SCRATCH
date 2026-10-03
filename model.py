@@ -28,7 +28,7 @@ class Positional_Encoding(nn.Module):
         pe=pe.unsqueeze(0)
         self.register_buffer("pe",pe)
     def forward(self,x):
-        x=x+(self.pe[:,:x.shape[1],:]).requires_grad(False)
+        x=x+(self.pe[:,:x.shape[1],:])
         return self.dropout(x)
     
 class Layer_Normilization(nn.Module):
@@ -109,9 +109,9 @@ class MultiHeadAttention(nn.Module):
         
         return self.w_o(x)
 class Residual_connection(nn.Module):
-    def __init__(self,features:int,dropout:nn.Dropout):
+    def __init__(self,features:int,dropout:float):
         super().__init__()
-        self.dropout=dropout
+        self.dropout=nn.Dropout(dropout)
         self.norm=Layer_Normilization(features)
     def forward(self,x,sublayer):
         return x+self.dropout(sublayer(self.norm(x)))
